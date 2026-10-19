@@ -3,6 +3,7 @@ import {
   type NewWizard,
   type Spell,
   type AcademyEvent,
+  type SpellCastEvent,
   type House,
   type HousePoints,
   type SpellCategory,
@@ -15,14 +16,20 @@ import {
 } from "./types";
 
 import { WizardRepository, SpellRepository } from "./repository";
-import { Log } from "./decorators";
+import { Log, Cache } from "./decorators";
+
+// Exercice 6 : type guard strict pour House
+const validHouses: readonly House[] = [
+  "Gryffindor",
+  "Slytherin",
+  "Ravenclaw",
+  "Hufflepuff"
+];
 
 function isHouse(value: unknown): value is House {
   return (
-    value === "Gryffindor" ||
-    value === "Slytherin" ||
-    value === "Ravenclaw" ||
-    value === "Hufflepuff"
+    typeof value === "string" &&
+    validHouses.some(house => house === value)
   );
 }
 
@@ -43,6 +50,11 @@ function isWizard(value: unknown): value is Wizard {
   );
 }
 
+// Exercice 3 : gestionnaire qui n'accepte que les événements spell-cast
+function handleSpellCast(event: SpellCastEvent): void {
+  console.log(`Wizard ${event.wizardId} cast ${event.spellName}`);
+}
+
 class AcademyService {
   constructor(
     private readonly wizards: WizardRepository,
@@ -61,10 +73,17 @@ class AcademyService {
     return `${wizard.name} casts ${spell.name}!`;
   }
 
+  // Exercice 1 : enregistrer un sorcier sans fournir d'id
+  registerWizard(newWizard: NewWizard): Wizard {
+    const nextId = Math.max(0, ...this.wizards.getAll().map(w => w.id)) + 1;
+    const wizard = { ...newWizard, id: nextId } as Wizard;
+    this.wizards.add(wizard);
+    return wizard;
+  }
+
   findByHouse(house: House): WizardSummary[] {
     return this.wizards
-      .getAll()
-      .filter(wizard => wizard.house === house)
+      .findByHouse(house)
       .map(({ id, name, house }) => ({ id, name, house }));
   }
 
@@ -72,11 +91,19 @@ class AcademyService {
     return this.wizards.update(id, changes);
   }
 
-  getSpellEvents(events: AcademyEvent[]): Extract<AcademyEvent, { type: "spell-cast" }>[] {
+  getSpellEvents(events: AcademyEvent[]): SpellCastEvent[] {
     return events.filter(
-      (event): event is Extract<AcademyEvent, { type: "spell-cast" }> =>
-        event.type === "spell-cast"
+      (event): event is SpellCastEvent => event.type === "spell-cast"
     );
+  }
+}
+
+// Exercice 5 : service avec méthode mise en cache
+class SpellCalculator {
+  @Cache
+  calculatePower(basePower: number, multiplier: number): number {
+    console.log("Calculating...");
+    return basePower * multiplier;
   }
 }
 
@@ -156,6 +183,57 @@ const events: AcademyEvent[] = [
   { type: "wizard-expelled", wizardId: 3 }
 ];
 console.log(academy.getSpellEvents(events));
+
+// ---------------- TAF : tests des exercices ----------------
+
+console.log("\n--- Ex1 : nouveau sorcier ---");
+const luna = academy.registerWizard({
+  name: "Luna Lovegood",
+  house: "Ravenclaw",
+  level: 4,
+  active: true
+});
+console.log(luna); // id: 4
+
+console.log("\n--- Ex2 : findByHouse (repository) ---");
+console.log(wizards.findByHouse("Slytherin"));
+// wizards.findByHouse("Durmstrang"); // ❌ erreur de compilation
+
+console.log("\n--- Ex3 : handleSpellCast ---");
+handleSpellCast({ type: "spell-cast", wizardId: 1, spellName: "Expelliarmus" });
+// handleSpellCast({ type: "level-up", wizardId: 1, newLevel: 3 }); // ❌ erreur de compilation
+
+console.log("\n--- Ex4 : validation de la puissance ---");
+spells.add({ id: 104, name: "Protego Maxima", category: "defense", power: 50 });
+try {
+  spells.add({ id: 103, name: "Invalid Spell", category: "attack", power: -10 });
+} catch (error) {
+  console.log("Rejeté :", error instanceof Error ? error.message : error);
+}
+
+console.log("\n--- Ex5 : cache ---");
+const calculator = new SpellCalculator();
+console.log(calculator.calculatePower(10, 3)); // MISS
+console.log(calculator.calculatePower(10, 3)); // HIT
+console.log(calculator.calculatePower(5, 2));  // MISS
+
+console.log("\n--- Ex6 : type guard strict ---");
+const validData: unknown = {
+  id: 1,
+  name: "Harry Potter",
+  house: "Gryffindor",
+  level: 5,
+  active: true
+};
+const invalidData: unknown = {
+  id: 2,
+  name: "Viktor",
+  house: "Durmstrang",
+  level: 5,
+  active: true
+};
+console.log(isWizard(validData));   // true
+console.log(isWizard(invalidData)); // false
 
 // Compile-time demonstrations: these aliases are checked by TypeScript.
 type CastArguments = Parameters<AcademyService["castSpell"]>;
