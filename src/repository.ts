@@ -1,5 +1,5 @@
 import type { Wizard, Spell } from "./types";
-import { Log, MeasureTime } from "./decorators";
+import { Log, MeasureTime, ValidateSpellPower } from "./decorators";
 
 export class Repository<T extends { id: number }> {
   private items: T[] = [];
@@ -28,5 +28,17 @@ export class Repository<T extends { id: number }> {
   }
 }
 
-export class WizardRepository extends Repository<Wizard> {}
-export class SpellRepository extends Repository<Spell> {}
+// Exercice 2 : filtrer par maison
+export class WizardRepository extends Repository<Wizard> {
+  findByHouse(house: Wizard["house"]): Wizard[] {
+    return this.getAll().filter(wizard => wizard.house === house);
+  }
+}
+
+// Exercice 4 : validation de la puissance
+export class SpellRepository extends Repository<Spell> {
+  @ValidateSpellPower
+  override add(spell: Spell): void {
+    super.add(spell);
+  }
+}

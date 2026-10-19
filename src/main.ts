@@ -1,5 +1,6 @@
 import {
   type Wizard,
+  type NewWizard,
   type Spell,
   type AcademyEvent,
   type House,
